@@ -159,6 +159,10 @@ public class MsgCenter {
 				}
 				core.getMsgList().remove(0);
 			}
+
+			if (!core.isAlive()) {
+				break;
+			}
 			try {
 				TimeUnit.MILLISECONDS.sleep(1000);
 			} catch (InterruptedException e) {

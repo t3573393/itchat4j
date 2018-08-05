@@ -1,5 +1,7 @@
 package cn.zhouyafeng.itchat4j.service;
 
+import java.io.OutputStream;
+
 /**
  * 登陆服务接口
  * 
@@ -38,6 +40,8 @@ public interface ILoginService {
 	 * @return
 	 */
 	boolean getQR(String qrPath);
+
+	boolean getQR(OutputStream out);
 
 	/**
 	 * web初始化

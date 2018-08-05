@@ -25,9 +25,11 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
+import cn.zhouyafeng.itchat4j.Wechat;
 import cn.zhouyafeng.itchat4j.beans.BaseMsg;
 import cn.zhouyafeng.itchat4j.core.Core;
 import cn.zhouyafeng.itchat4j.core.MsgCenter;
+import cn.zhouyafeng.itchat4j.core.StatusCenter;
 import cn.zhouyafeng.itchat4j.service.ILoginService;
 import cn.zhouyafeng.itchat4j.utils.Config;
 import cn.zhouyafeng.itchat4j.utils.MyHttpClient;
@@ -78,10 +80,13 @@ public class LoginServiceImpl implements ILoginService {
 			long millis = System.currentTimeMillis();
 			params.add(new BasicNameValuePair(LoginParaEnum.R.para(), String.valueOf(millis / 1579L)));
 			params.add(new BasicNameValuePair(LoginParaEnum._.para(), String.valueOf(millis)));
+			LOG.debug("http get url:" + URLEnum.LOGIN_URL.getUrl());
+			LOG.debug("http get params:" + params);
 			HttpEntity entity = httpClient.doGet(URLEnum.LOGIN_URL.getUrl(), params, true, null);
 
 			try {
 				String result = EntityUtils.toString(entity);
+				LOG.debug("http get result:" + result);
 				String status = checklogin(result);
 
 				if (ResultEnum.SUCCESS.getCode().equals(status)) {
@@ -109,11 +114,13 @@ public class LoginServiceImpl implements ILoginService {
 		params.add(new BasicNameValuePair(UUIDParaEnum.FUN.para(), UUIDParaEnum.FUN.value()));
 		params.add(new BasicNameValuePair(UUIDParaEnum.LANG.para(), UUIDParaEnum.LANG.value()));
 		params.add(new BasicNameValuePair(UUIDParaEnum._.para(), String.valueOf(System.currentTimeMillis())));
-
+		LOG.debug("http get url:" + URLEnum.UUID_URL.getUrl());
+		LOG.debug("http get params:" + params);
 		HttpEntity entity = httpClient.doGet(URLEnum.UUID_URL.getUrl(), params, true, null);
 
 		try {
 			String result = EntityUtils.toString(entity);
+			LOG.debug("http get result:" + result);
 			String regEx = "window.QRLogin.code = (\\d+); window.QRLogin.uuid = \"(\\S+?)\";";
 			Matcher matcher = CommonTools.getMatcher(regEx, result);
 			if (matcher.find()) {
@@ -132,6 +139,7 @@ public class LoginServiceImpl implements ILoginService {
 	public boolean getQR(String qrPath) {
 		qrPath = qrPath + File.separator + "QR.jpg";
 		String qrUrl = URLEnum.QRCODE_URL.getUrl() + core.getUuid();
+		LOG.debug("http get url:" + qrUrl);
 		HttpEntity entity = myHttpClient.doGet(qrUrl, null, true, null);
 		try {
 			OutputStream out = new FileOutputStream(qrPath);
@@ -154,6 +162,24 @@ public class LoginServiceImpl implements ILoginService {
 	}
 
 	@Override
+	public boolean getQR(OutputStream out) {
+		String qrUrl = URLEnum.QRCODE_URL.getUrl() + core.getUuid();
+		LOG.debug("http get url:" + qrUrl);
+		HttpEntity entity = myHttpClient.doGet(qrUrl, null, true, null);
+		try {
+			byte[] bytes = EntityUtils.toByteArray(entity);
+			out.write(bytes);
+			out.flush();
+			out.close();
+		} catch (Exception e) {
+			LOG.info(e.getMessage());
+			return false;
+		}
+
+		return true;
+	}
+
+	@Override
 	public boolean webWxInit() {
 		core.setAlive(true);
 		core.setLastNormalRetcodeTime(System.currentTimeMillis());
@@ -166,9 +192,12 @@ public class LoginServiceImpl implements ILoginService {
 		Map<String, Object> paramMap = core.getParamMap();
 
 		// 请求初始化接口
+		LOG.debug("http post url:" + url);
+		LOG.debug("http post url:" + JSON.toJSONString(paramMap));
 		HttpEntity entity = httpClient.doPost(url, JSON.toJSONString(paramMap));
 		try {
 			String result = EntityUtils.toString(entity, Consts.UTF_8);
+			LOG.debug("http post result:" + result);
 			JSONObject obj = JSON.parseObject(result);
 
 			JSONObject user = obj.getJSONObject(StorageLoginInfoEnum.User.getKey());
@@ -232,8 +261,11 @@ public class LoginServiceImpl implements ILoginService {
 		String paramStr = JSON.toJSONString(paramMap);
 
 		try {
+			LOG.debug("http post url:" + url);
+			LOG.debug("http post params:" + paramStr);
 			HttpEntity entity = httpClient.doPost(url, paramStr);
-			EntityUtils.toString(entity, Consts.UTF_8);
+			String result = EntityUtils.toString(entity, Consts.UTF_8);
+			LOG.debug("http post result:" + result);
 		} catch (Exception e) {
 			LOG.error("微信状态通知接口失败！", e);
 		}
@@ -243,7 +275,7 @@ public class LoginServiceImpl implements ILoginService {
 	@Override
 	public void startReceiving() {
 		core.setAlive(true);
-		new Thread(new Runnable() {
+		Wechat.getExecutor().execute(new Runnable() {
 			int retryCount = 0;
 
 			@Override
@@ -251,7 +283,7 @@ public class LoginServiceImpl implements ILoginService {
 				while (core.isAlive()) {
 					try {
 						Map<String, String> resultMap = syncCheck();
-						LOG.info(JSONObject.toJSONString(resultMap));
+						LOG.info("syncCheck:" + JSONObject.toJSONString(resultMap));
 						String retcode = resultMap.get("retcode");
 						String selector = resultMap.get("selector");
 						if (retcode.equals(RetCodeEnum.UNKOWN.getCode())) {
@@ -259,9 +291,11 @@ public class LoginServiceImpl implements ILoginService {
 							continue;
 						} else if (retcode.equals(RetCodeEnum.LOGIN_OUT.getCode())) { // 退出
 							LOG.info(RetCodeEnum.LOGIN_OUT.getType());
+							StatusCenter.logout();
 							break;
 						} else if (retcode.equals(RetCodeEnum.LOGIN_OTHERWHERE.getCode())) { // 其它地方登陆
 							LOG.info(RetCodeEnum.LOGIN_OTHERWHERE.getType());
+							StatusCenter.logout();
 							break;
 						} else if (retcode.equals(RetCodeEnum.MOBILE_LOGIN_OUT.getCode())) { // 移动端退出
 							LOG.info(RetCodeEnum.MOBILE_LOGIN_OUT.getType());
@@ -327,7 +361,7 @@ public class LoginServiceImpl implements ILoginService {
 
 				}
 			}
-		}).start();
+		});
 
 	}
 
@@ -336,10 +370,13 @@ public class LoginServiceImpl implements ILoginService {
 		String url = String.format(URLEnum.WEB_WX_GET_CONTACT.getUrl(),
 				core.getLoginInfo().get(StorageLoginInfoEnum.url.getKey()));
 		Map<String, Object> paramMap = core.getParamMap();
+		LOG.debug("http post url:" + url);
+		LOG.debug("http post params:" + JSON.toJSONString(paramMap));
 		HttpEntity entity = httpClient.doPost(url, JSON.toJSONString(paramMap));
 
 		try {
 			String result = EntityUtils.toString(entity, Consts.UTF_8);
+			LOG.debug("http post result:" + result);
 			JSONObject fullFriendsJsonList = JSON.parseObject(result);
 			// 查看seq是否为0，0表示好友列表已全部获取完毕，若大于0，则表示好友列表未获取完毕，当前的字节数（断点续传）
 			long seq = 0;
@@ -356,12 +393,15 @@ public class LoginServiceImpl implements ILoginService {
 				// 设置seq传参
 				params.add(new BasicNameValuePair("r", String.valueOf(currentTime)));
 				params.add(new BasicNameValuePair("seq", String.valueOf(seq)));
+				LOG.debug("http get url:" + url);
+				LOG.debug("http get params:" + params);
 				entity = httpClient.doGet(url, params, false, null);
 
 				params.remove(new BasicNameValuePair("r", String.valueOf(currentTime)));
 				params.remove(new BasicNameValuePair("seq", String.valueOf(seq)));
 
 				result = EntityUtils.toString(entity, Consts.UTF_8);
+				LOG.debug("http get result:" + result);
 				fullFriendsJsonList = JSON.parseObject(result);
 
 				if (fullFriendsJsonList.get("Seq") != null) {
@@ -413,9 +453,12 @@ public class LoginServiceImpl implements ILoginService {
 			list.add(map);
 		}
 		paramMap.put("List", list);
+		LOG.debug("http get url:" + url);
+		LOG.debug("http get params:" + JSON.toJSONString(paramMap));
 		HttpEntity entity = httpClient.doPost(url, JSON.toJSONString(paramMap));
 		try {
 			String text = EntityUtils.toString(entity, Consts.UTF_8);
+			LOG.debug("http get result:" + text);
 			JSONObject obj = JSON.parseObject(text);
 			JSONArray contactList = obj.getJSONArray("ContactList");
 			for (int i = 0; i < contactList.size(); i++) { // 群好友
@@ -486,18 +529,22 @@ public class LoginServiceImpl implements ILoginService {
 			String text = "";
 
 			try {
+				LOG.debug("http get url:" + originalUrl);
 				HttpEntity entity = myHttpClient.doGet(originalUrl, null, false, null);
 				text = EntityUtils.toString(entity);
+				LOG.debug("http get result:" + text);
 			} catch (Exception e) {
 				LOG.info(e.getMessage());
 				return;
 			}
-			//add by 默非默 2017-08-01 22:28:09
-			//如果登录被禁止时，则登录返回的message内容不为空，下面代码则判断登录内容是否为空，不为空则退出程序
+			// add by 默非默 2017-08-01 22:28:09
+			// 如果登录被禁止时，则登录返回的message内容不为空，下面代码则判断登录内容是否为空，不为空则退出程序
 			String msg = getLoginMessage(text);
-			if (!"".equals(msg)){
+			if (!"".equals(msg)) {
 				LOG.info(msg);
-				System.exit(0);
+				// System.exit(0);
+				StatusCenter.sysException();
+				return;
 			}
 			Document doc = CommonTools.xmlParser(text);
 			if (doc != null) {
@@ -600,8 +647,11 @@ public class LoginServiceImpl implements ILoginService {
 		paramMap.put("rr", -new Date().getTime() / 1000);
 		String paramStr = JSON.toJSONString(paramMap);
 		try {
+			LOG.debug("http post url:" + url);
+			LOG.debug("http post params:" + paramStr);
 			HttpEntity entity = myHttpClient.doPost(url, paramStr);
 			String text = EntityUtils.toString(entity, Consts.UTF_8);
+			LOG.debug("http post result:" + text);
 			JSONObject obj = JSON.parseObject(text);
 			if (obj.getJSONObject("BaseResponse").getInteger("Ret") != 0) {
 				result = null;
@@ -647,6 +697,8 @@ public class LoginServiceImpl implements ILoginService {
 		params.add(new BasicNameValuePair("_", String.valueOf(new Date().getTime())));
 		SleepUtils.sleep(7);
 		try {
+			LOG.debug("http get url:" + url);
+			LOG.debug("http get params:" + params);
 			HttpEntity entity = myHttpClient.doGet(url, params, true, null);
 			if (entity == null) {
 				resultMap.put("retcode", "9999");
@@ -654,6 +706,7 @@ public class LoginServiceImpl implements ILoginService {
 				return resultMap;
 			}
 			String text = EntityUtils.toString(entity);
+			LOG.debug("http get result:" + text);
 			String regEx = "window.synccheck=\\{retcode:\"(\\d+)\",selector:\"(\\d+)\"\\}";
 			Matcher matcher = CommonTools.getMatcher(regEx, text);
 			if (!matcher.find() || matcher.group(1).equals("2")) {
@@ -670,13 +723,14 @@ public class LoginServiceImpl implements ILoginService {
 
 	/**
 	 * 解析登录返回的消息，如果成功登录，则message为空
+	 * 
 	 * @param result
 	 * @return
 	 */
-	public String getLoginMessage(String result){
+	public String getLoginMessage(String result) {
 		String[] strArr = result.split("<message>");
 		String[] rs = strArr[1].split("</message>");
-		if (rs!=null && rs.length>1) {
+		if (rs != null && rs.length > 1) {
 			return rs[0];
 		}
 		return "";

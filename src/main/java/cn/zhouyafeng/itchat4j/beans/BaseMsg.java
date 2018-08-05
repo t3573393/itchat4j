@@ -41,7 +41,7 @@ public class BaseMsg implements Serializable {
 	private int statusNotifyCode;
 	private AppInfo appInfo;
 	private int appMsgType;
-	private String Type;
+	private String type;
 	private int playLength;
 	private String mediaId;
 	private String content;
@@ -228,11 +228,11 @@ public class BaseMsg implements Serializable {
 	}
 
 	public String getType() {
-		return Type;
+		return type;
 	}
 
 	public void setType(String type) {
-		Type = type;
+		this.type = type;
 	}
 
 	public int getPlayLength() {

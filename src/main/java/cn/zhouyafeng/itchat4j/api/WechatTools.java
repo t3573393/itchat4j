@@ -17,6 +17,7 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
 import cn.zhouyafeng.itchat4j.core.Core;
+import cn.zhouyafeng.itchat4j.core.StatusCenter;
 import cn.zhouyafeng.itchat4j.utils.enums.StorageLoginInfoEnum;
 import cn.zhouyafeng.itchat4j.utils.enums.URLEnum;
 
@@ -155,8 +156,12 @@ public class WechatTools {
 		params.add(
 				new BasicNameValuePair("skey", (String) core.getLoginInfo().get(StorageLoginInfoEnum.skey.getKey())));
 		try {
+			LOG.debug("http get url:" + url);
+			LOG.debug("http get paramStr:" + params);
 			HttpEntity entity = core.getMyHttpClient().doGet(url, params, false, null);
 			String text = EntityUtils.toString(entity, Consts.UTF_8); // 无消息
+			LOG.debug("http get result:" + text);
+			StatusCenter.logout();
 			return true;
 		} catch (Exception e) {
 			LOG.debug(e.getMessage());
@@ -194,8 +199,11 @@ public class WechatTools {
 		msgMap.put("BaseRequest", msgMap_BaseRequest);
 		try {
 			String paramStr = JSON.toJSONString(msgMap);
+			LOG.debug("http post url:" + url);
+			LOG.debug("http post paramStr:" + paramStr);
 			HttpEntity entity = core.getMyHttpClient().doPost(url, paramStr);
-			// String result = EntityUtils.toString(entity, Consts.UTF_8);
+			String result = EntityUtils.toString(entity, Consts.UTF_8);
+			LOG.debug("http post result:" + result);
 			LOG.info("修改备注" + remName);
 		} catch (Exception e) {
 			LOG.error("remarkNameByUserName", e);

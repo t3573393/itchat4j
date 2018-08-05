@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import cn.zhouyafeng.itchat4j.core.Core;
+import cn.zhouyafeng.itchat4j.core.StatusCenter;
 import cn.zhouyafeng.itchat4j.utils.SleepUtils;
 
 /**
@@ -30,6 +31,7 @@ public class CheckLoginStatusThread implements Runnable {
 			if (t1 - core.getLastNormalRetcodeTime() > 60 * 1000) { // 超过60秒，判为离线
 				core.setAlive(false);
 				LOG.info("微信已离线");
+				StatusCenter.logout();
 			}
 			SleepUtils.sleep(10 * 1000); // 休眠10秒
 		}

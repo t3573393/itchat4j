@@ -1,10 +1,14 @@
 package cn.zhouyafeng.itchat4j.controller;
 
+import java.io.OutputStream;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import cn.zhouyafeng.itchat4j.Wechat;
 import cn.zhouyafeng.itchat4j.api.WechatTools;
 import cn.zhouyafeng.itchat4j.core.Core;
+import cn.zhouyafeng.itchat4j.core.StatusCenter;
 import cn.zhouyafeng.itchat4j.service.ILoginService;
 import cn.zhouyafeng.itchat4j.service.impl.LoginServiceImpl;
 import cn.zhouyafeng.itchat4j.thread.CheckLoginStatusThread;
@@ -44,7 +48,9 @@ public class LoginController {
 					break;
 				} else if (count == 10) {
 					LOG.error("2.2. 获取登陆二维码图片失败，系统退出");
-					System.exit(0);
+					// System.exit(0);
+					StatusCenter.sysException();
+					return;
 				}
 			}
 			LOG.info("3. 请扫描二维码图片，并在手机上确认");
@@ -52,15 +58,109 @@ public class LoginController {
 				loginService.login();
 				core.setAlive(true);
 				LOG.info(("登陆成功"));
+				StatusCenter.login();
 				break;
 			}
 			LOG.info("4. 登陆超时，请重新扫描二维码图片");
 		}
+		afterLogin();
+	}
+
+	// 获取登陆验证码后直接返回
+	public void loginAsync(OutputStream out) {
+		boolean isSuccess = false;
+		if (core.isAlive()) { // 已登陆
+			LOG.info("itchat4j已登陆");
+			return;
+		}
+		for (int count = 0; count < 10; count++) {
+			LOG.info("获取UUID");
+			while (loginService.getUuid() == null) {
+				LOG.info("1. 获取微信UUID");
+				while (loginService.getUuid() == null) {
+					LOG.warn("1.1. 获取微信UUID失败，两秒后重新获取");
+					SleepUtils.sleep(2000);
+				}
+			}
+			LOG.info("2. 获取登陆二维码图片");
+			if (loginService.getQR(out)) {
+				isSuccess = true;
+				break;
+			} else if (count == 10) {
+				LOG.error("2.2. 获取登陆二维码图片失败，系统退出");
+				// System.exit(0);
+				StatusCenter.sysException();
+				return;
+			}
+		}
+
+		if (isSuccess) {
+			Wechat.getExecutor().execute(new Runnable() {
+				@Override
+				public void run() {
+					while (true) {
+						LOG.info("3. 请扫描二维码图片，并在手机上确认");
+						if (!core.isAlive()) {
+							loginService.login();
+							core.setAlive(true);
+							LOG.info(("登陆成功"));
+							StatusCenter.login();
+							afterLogin();
+							break;
+						}
+						LOG.info("4. 登陆超时，请重新扫描二维码图片");
+					}
+				}
+			});
+		}
+	}
+
+	public void login(OutputStream out) {
+		if (core.isAlive()) { // 已登陆
+			LOG.info("itchat4j已登陆");
+			return;
+		}
+		while (true) {
+			for (int count = 0; count < 10; count++) {
+				LOG.info("获取UUID");
+				while (loginService.getUuid() == null) {
+					LOG.info("1. 获取微信UUID");
+					while (loginService.getUuid() == null) {
+						LOG.warn("1.1. 获取微信UUID失败，两秒后重新获取");
+						SleepUtils.sleep(2000);
+					}
+				}
+				LOG.info("2. 获取登陆二维码图片");
+				if (loginService.getQR(out)) {
+					break;
+				} else if (count == 10) {
+					LOG.error("2.2. 获取登陆二维码图片失败，系统退出");
+					// System.exit(0);
+					StatusCenter.sysException();
+					return;
+				}
+			}
+			LOG.info("3. 请扫描二维码图片，并在手机上确认");
+			if (!core.isAlive()) {
+				loginService.login();
+				core.setAlive(true);
+				LOG.info(("登陆成功"));
+				StatusCenter.login();
+				break;
+			}
+			LOG.info("4. 登陆超时，请重新扫描二维码图片");
+		}
+		afterLogin();
+	}
+
+	private void afterLogin() {
 
 		LOG.info("5. 登陆成功，微信初始化");
 		if (!loginService.webWxInit()) {
 			LOG.info("6. 微信初始化异常");
-			System.exit(0);
+			// System.exit(0);
+			StatusCenter.sysException();
+			return;
 		}
 
 		LOG.info("6. 开启微信状态通知");
@@ -83,6 +183,6 @@ public class LoginController {
 		WechatTools.setUserInfo(); // 登陆成功后缓存本次登陆好友相关消息（NickName, UserName）
 
 		LOG.info("12.开启微信状态检测线程");
-		new Thread(new CheckLoginStatusThread()).start();
+		Wechat.getExecutor().execute(new CheckLoginStatusThread());
 	}
 }
